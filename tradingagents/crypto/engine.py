@@ -109,7 +109,7 @@ class CryptoEngine:
             position = state["positions"].get(symbol)
             action = row["signal"]
 
-            if action == "BUY" and position is None and state["cash_usdc"] > 0:
+            if action == "BUY" and not state["positions"] and state["cash_usdc"] > 0:
                 allocation = state["cash_usdc"] * self.config.max_position_pct
                 if allocation <= 0:
                     continue
