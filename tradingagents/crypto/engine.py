@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .okx import OKXClient, OKXError
+from .okx import OKXClient
 from .strategy import backtest_ohlcv, compute_indicators, generate_signal
 
 
