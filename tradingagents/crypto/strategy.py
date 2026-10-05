@@ -31,8 +31,8 @@ def compute_indicators(candles: list[dict]) -> pd.DataFrame:
 
     gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
     loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
-    loss = loss.mask(loss == 0)
-    rs = gain / loss
+    loss_safe = loss.where(loss != 0, 1e-12)
+    rs = gain / loss_safe
     df["rsi14"] = (100 - (100 / (1 + rs))).astype(float)
     df["ema20"] = close.ewm(span=20, adjust=False).mean()
     df["ema50"] = close.ewm(span=50, adjust=False).mean()
