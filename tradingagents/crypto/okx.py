@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
@@ -35,7 +35,7 @@ def _decimal(value: str | int | float | Decimal) -> Decimal:
 
 
 def _iso_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _join_path(path: str, params: dict[str, str] | None) -> str:
