@@ -1,0 +1,59 @@
+name: HORMOZI Coinbase Paper Engine
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'hormozi/**'
+    paths:
+      - 'tradingagents/crypto/coinbase_agent.py'
+      - 'tests/test_coinbase_agent.py'
+      - '.github/workflows/coinbase-agent.yml'
+
+concurrency:
+  group: hormozi-coinbase-paper
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline risk self-test
+        run: python tradingagents/crypto/coinbase_agent.py --self-test
+      - name: Restore paper ledger
+        uses: actions/cache/restore@v4
+        with:
+          path: .runtime
+          key: hormozi-coinbase-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            hormozi-coinbase-state-
+      - name: Coinbase public scan and paper cycle
+        env:
+          COINBASE_PAPER_STARTING_EUR: '10.715311'
+          COINBASE_LIVE_TRADING_ENABLED: 'false'
+        run: python tradingagents/crypto/coinbase_agent.py --state-path .runtime/coinbase_state.json
+      - name: Save paper ledger
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: .runtime
+          key: hormozi-coinbase-state-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload cycle report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hormozi-coinbase-report-${{ github.run_id }}
+          path: .runtime/coinbase_report.json
+          if-no-files-found: ignore
+          retention-days: 7
