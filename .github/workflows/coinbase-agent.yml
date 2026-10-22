@@ -30,11 +30,11 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install test runner
-        run: python -m pip install --disable-pip-version-check 'pytest>=8,<9' 'python-dotenv>=1.0.0'
+        run: python -m pip install --disable-pip-version-check 'pytest>=8,<9'
       - name: Unit tests (offline; no credentials)
-        run: python -m pytest -q tests/test_coinbase_agent.py
+        run: python -m pytest -q --confcutdir=.github tests/test_coinbase_agent.py
       - name: Offline risk self-test
-        run: python -m tradingagents.crypto.coinbase_agent --self-test
+        run: python tradingagents/crypto/coinbase_agent.py --self-test
       - name: Restore paper ledger
         uses: actions/cache/restore@v4
         with:
@@ -46,7 +46,7 @@ jobs:
         env:
           COINBASE_PAPER_STARTING_EUR: '10.715311'
           COINBASE_LIVE_TRADING_ENABLED: 'false'
-        run: python -m tradingagents.crypto.coinbase_agent --state-path .runtime/coinbase_state.json
+        run: python tradingagents/crypto/coinbase_agent.py --state-path .runtime/coinbase_state.json
       - name: Save paper ledger
         if: success()
         uses: actions/cache/save@v4

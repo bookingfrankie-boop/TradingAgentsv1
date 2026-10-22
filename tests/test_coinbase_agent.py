@@ -72,7 +72,7 @@ def test_candle_request_has_required_time_range(monkeypatch):
     def fake(url):
         seen["url"]=url
         return {"candles":[{"start":"1790000000","open":"100","high":"101","low":"99","close":"100.5","volume":"15"}]}
-    monkeypatch.setattr("tradingagents.crypto.coinbase_agent.http_json",fake)
+    monkeypatch.setattr(engine_module, "http_json", fake)
     rows=fetch_candles("BTC-EUR","ONE_HOUR",60,now_ts=1_800_000_000)
     q=parse_qs(urlparse(seen["url"]).query)
     assert q["start"] == [str(1_800_000_000-3600*62)]
@@ -80,7 +80,6 @@ def test_candle_request_has_required_time_range(monkeypatch):
     assert rows[0].close == pytest.approx(100.5)
 
 def test_live_mode_is_blocked(monkeypatch,tmp_path: Path):
-    from tradingagents.crypto import coinbase_agent
     monkeypatch.setenv("COINBASE_LIVE_TRADING_ENABLED","true")
     with pytest.raises(UnsafeLiveModeError,match="paper-only"):
         coinbase_agent.run_once(tmp_path/"state.json",10.715311)
