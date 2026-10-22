@@ -1,12 +1,27 @@
+import importlib.util
+import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
 import pytest
 
-from tradingagents.crypto.coinbase_agent import (
-    Candle, MarketDataError, UnsafeLiveModeError, empty_state,
-    evaluate_signal, fetch_candles, load_state, net_reward_risk,
-    paper_cycle, save_state,
-)
+MODULE_PATH = Path(__file__).resolve().parents[1] / "tradingagents" / "crypto" / "coinbase_agent.py"
+SPEC = importlib.util.spec_from_file_location("hormozi_coinbase_agent", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
+engine_module = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = engine_module
+SPEC.loader.exec_module(engine_module)
+
+Candle = engine_module.Candle
+MarketDataError = engine_module.MarketDataError
+UnsafeLiveModeError = engine_module.UnsafeLiveModeError
+empty_state = engine_module.empty_state
+evaluate_signal = engine_module.evaluate_signal
+fetch_candles = engine_module.fetch_candles
+load_state = engine_module.load_state
+net_reward_risk = engine_module.net_reward_risk
+paper_cycle = engine_module.paper_cycle
+save_state = engine_module.save_state
 
 def make_candles(values, start, duration, volumes=None):
     volumes = volumes or [100.0] * len(values)
@@ -18,7 +33,6 @@ def test_candle_parser_rejects_bad_values():
 
 def test_reward_risk_includes_fees_and_slippage():
     assert net_reward_risk(100) >= 2.0
-    assert net_reward_risk(100, target_pct=0.20) if False else True
 
 def test_insufficient_data_never_buys():
     now=1_800_000_000
@@ -28,7 +42,8 @@ def test_insufficient_data_never_buys():
 
 def test_bearish_daily_filter_never_buys():
     now=1_800_000_000
-    ds=now-now%86400; hs=now-now%3600
+    ds = now - now % 86400
+    hs = now - now % 3600
     d=make_candles([130-i for i in range(20)],ds-20*86400,86400)
     h=make_candles([100+i*.1 for i in range(40)],hs-40*3600,3600,[100+i for i in range(40)])
     result=evaluate_signal("BTC-EUR",110,h,d,now)
@@ -53,7 +68,8 @@ def test_paper_entry_respects_cap_and_reserve():
 
 def test_paper_exit_records_pnl():
     now=1_800_000_000
-    state=empty_state(10.715311,now); state["cash_eur"]=8.715311
+    state = empty_state(10.715311, now)
+    state["cash_eur"] = 8.715311
     state["position"]={"product_id":"BTC-EUR","entry_price":100.,"quantity":.0198,"entry_cost_eur":2.,
                        "stop_price":96.,"target_price":112.,"entry_ts":now-3600}
     obs=[{"product_id":"BTC-EUR","price":113.,"analysis":{"product_id":"BTC-EUR","signal":"WAIT"}}]
@@ -62,10 +78,12 @@ def test_paper_exit_records_pnl():
     assert any("take_profit" in a for a in report["actions"])
 
 def test_state_round_trip_and_corruption_fails_closed(tmp_path: Path):
-    path=tmp_path/"state.json"; save_state(path,empty_state(10.715311,1_800_000_000))
+    path = tmp_path / "state.json"
+    save_state(path, empty_state(10.715311, 1_800_000_000))
     assert load_state(path)["cash_eur"] == pytest.approx(10.715311)
     path.write_text("bad json",encoding="utf-8")
-    with pytest.raises(RuntimeError,match="Refusing to overwrite invalid"): load_state(path)
+    with pytest.raises(RuntimeError, match="Refusing to overwrite invalid"):
+        load_state(path)
 
 def test_candle_request_has_required_time_range(monkeypatch):
     seen={}
@@ -81,5 +99,5 @@ def test_candle_request_has_required_time_range(monkeypatch):
 
 def test_live_mode_is_blocked(monkeypatch,tmp_path: Path):
     monkeypatch.setenv("COINBASE_LIVE_TRADING_ENABLED","true")
-    with pytest.raises(UnsafeLiveModeError,match="paper-only"):
-        coinbase_agent.run_once(tmp_path/"state.json",10.715311)
+    with pytest.raises(UnsafeLiveModeError, match="paper-only"):
+        engine_module.run_once(tmp_path / "state.json", 10.715311)

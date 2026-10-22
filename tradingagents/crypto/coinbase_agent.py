@@ -1,8 +1,16 @@
 """HORMOZI Coinbase market monitor + paper-trading engine. No live orders."""
 from __future__ import annotations
-import argparse, json, math, os, sys, time, urllib.error, urllib.parse, urllib.request
+import argparse
+import json
+import math
+import os
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +37,7 @@ class Candle:
     volume: float
 
     @classmethod
-    def from_api(cls, row: dict[str, Any]) -> "Candle":
+    def from_api(cls, row: dict[str, Any]) -> Candle:
         try:
             start = int(float(row["start"]))
             vals = [float(row[k]) for k in ("open", "high", "low", "close", "volume")]
@@ -124,11 +132,16 @@ def evaluate_signal(product_id: str, price: float, hourly: list[Candle], daily: 
     rr = net_reward_risk(price)
     ok = daily_ok and recovery and vol_ok and rr >= 2.0
     reasons = []
-    if not daily_ok: reasons.append("daily trend is not bullish")
-    if not recovery: reasons.append("hourly recovery is unconfirmed")
-    if not vol_ok: reasons.append("volume confirmation is absent")
-    if rr < 2.0: reasons.append("net reward:risk below 2:1")
-    if ok: reasons.append("all entry filters confirmed")
+    if not daily_ok:
+        reasons.append("daily trend is not bullish")
+    if not recovery:
+        reasons.append("hourly recovery is unconfirmed")
+    if not vol_ok:
+        reasons.append("volume confirmation is absent")
+    if rr < 2.0:
+        reasons.append("net reward:risk below 2:1")
+    if ok:
+        reasons.append("all entry filters confirmed")
     return {**result, "signal": "BUY" if ok else "WAIT", "reason": "; ".join(reasons),
             "daily_trend": "bullish" if daily_ok else "not_bullish",
             "daily_sma5": round(d5, 8), "daily_sma10": round(d10, 8),
@@ -139,7 +152,7 @@ def evaluate_signal(product_id: str, price: float, hourly: list[Candle], daily: 
 def empty_state(starting_eur: float = STARTING_EUR, now_ts: int | None = None) -> dict[str, Any]:
     now = int(time.time()) if now_ts is None else int(now_ts)
     return {"schema_version": 1, "strategy_version": VERSION, "mode": "paper",
-            "day_utc": datetime.fromtimestamp(now, timezone.utc).date().isoformat(),
+            "day_utc": datetime.fromtimestamp(now, UTC).date().isoformat(),
             "day_start_equity_eur": round(starting_eur, 8), "cash_eur": round(starting_eur, 8),
             "position": None, "realized_pnl_eur": 0.0, "consecutive_losses": 0,
             "halted_day_utc": None, "trade_count": 0, "history": []}
@@ -152,7 +165,8 @@ def load_state(path: Path, starting_eur: float = STARTING_EUR) -> dict[str, Any]
         if state.get("schema_version") != 1 or state.get("mode") != "paper":
             raise ValueError("unsupported schema/mode")
         for key in ("cash_eur", "day_start_equity_eur", "realized_pnl_eur", "history"):
-            if key not in state: raise ValueError(f"missing {key}")
+            if key not in state:
+                raise ValueError(f"missing {key}")
         return state
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
         raise RuntimeError(f"Refusing to overwrite invalid paper state: {exc}") from exc
@@ -166,7 +180,8 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
 def account_equity(state: dict[str, Any], prices: dict[str, float]) -> float:
     value = float(state["cash_eur"])
     pos = state.get("position")
-    if pos: value += float(pos["quantity"]) * float(prices.get(pos["product_id"], pos["entry_price"]))
+    if pos:
+        value += float(pos["quantity"]) * float(prices.get(pos["product_id"], pos["entry_price"]))
     return value
 
 def record(state: dict[str, Any], event: dict[str, Any]) -> None:
@@ -175,7 +190,7 @@ def record(state: dict[str, Any], event: dict[str, Any]) -> None:
 
 def paper_cycle(observations: list[dict[str, Any]], state: dict[str, Any], now_ts: int | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     now = int(time.time()) if now_ts is None else int(now_ts)
-    day = datetime.fromtimestamp(now, timezone.utc).date().isoformat()
+    day = datetime.fromtimestamp(now, UTC).date().isoformat()
     prices = {o["product_id"]: float(o["price"]) for o in observations}
     if not prices or any(not math.isfinite(v) or v <= 0 for v in prices.values()):
         raise MarketDataError("No valid prices")
@@ -213,13 +228,15 @@ def paper_cycle(observations: list[dict[str, Any]], state: dict[str, Any], now_t
             state["position"], state["trade_count"] = pos, state.get("trade_count", 0) + 1
             actions.append(f"Opened simulated {candidate['product_id']} position for €{spend:.2f}")
             record(state, {"ts": now, "action": "PAPER_BUY", **pos})
-        else: actions.append("No entry: cash reserve or after-cost risk check failed")
-    if not actions: actions.append("No trade: no confirmed entry signal")
+        else:
+            actions.append("No entry: cash reserve or after-cost risk check failed")
+    if not actions:
+        actions.append("No trade: no confirmed entry signal")
     eq = account_equity(state, prices)
     dd = max(0.0, (state["day_start_equity_eur"] - eq) / state["day_start_equity_eur"])
     if dd >= DAILY_DD_LIMIT or state.get("consecutive_losses", 0) >= MAX_LOSSES:
         state["halted_day_utc"] = day
-    report = {"timestamp_utc": datetime.fromtimestamp(now, timezone.utc).isoformat(),
+    report = {"timestamp_utc": datetime.fromtimestamp(now, UTC).isoformat(),
               "strategy_version": VERSION, "mode": "paper", "live_orders_enabled": False,
               "actions": actions, "signals": [x["analysis"] for x in observations],
               "cash_eur": round(float(state["cash_eur"]), 8), "equity_eur": round(eq, 8),
@@ -257,7 +274,8 @@ def run_once(state_path: Path, starting_eur: float = STARTING_EUR) -> dict[str, 
             s = row["analysis"]
             lines.append(f"| {row['product_id']} | {row['price']:.8f} | {row['change_24h_pct']:+.2f}% | {s['signal']} | {str(s.get('reason','')).replace('|','/')} |")
         lines += ["", "## Cycle actions", ""] + [f"- {a}" for a in report["actions"]]
-        with open(summary, "a", encoding="utf-8") as stream: stream.write("\n".join(lines) + "\n")
+        with open(summary, "a", encoding="utf-8") as stream:
+            stream.write("\n".join(lines) + "\n")
     print(json.dumps(report, indent=2, sort_keys=True))
     return report
 
