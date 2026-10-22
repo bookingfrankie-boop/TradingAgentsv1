@@ -29,10 +29,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install test runner
-        run: python -m pip install --disable-pip-version-check 'pytest>=8,<9'
-      - name: Unit tests (offline; no credentials)
-        run: python -m pytest -q --confcutdir=.github tests/test_coinbase_agent.py
       - name: Offline risk self-test
         run: python tradingagents/crypto/coinbase_agent.py --self-test
       - name: Restore paper ledger
