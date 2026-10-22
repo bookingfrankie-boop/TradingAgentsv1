@@ -197,7 +197,7 @@ def paper_cycle(observations: list[dict[str, Any]], state: dict[str, Any], now_t
             actions.append(f"Closed {pos['product_id']} ({reason}); net paper P/L €{pnl:.4f}")
             record(state, {"ts": now, "action": "PAPER_SELL", "product_id": pos["product_id"], "price": price, "pnl_eur": round(pnl, 8), "reason": reason})
     dd = max(0.0, (state["day_start_equity_eur"] - account_equity(state, prices)) / state["day_start_equity_eur"])
-    if dd >= DAILY_DD_LIMIT or state.get("consecutive_losses", 0) >= MAX_CONSECUTIVE_LOSSES:
+    if dd >= DAILY_DD_LIMIT or state.get("consecutive_losses", 0) >= MAX_LOSSES:
         state["halted_day_utc"] = day
     candidates = [x["analysis"] for x in observations if x.get("analysis", {}).get("signal") == "BUY"]
     if not state.get("position") and not closed and state.get("halted_day_utc") != day and candidates:
@@ -217,7 +217,7 @@ def paper_cycle(observations: list[dict[str, Any]], state: dict[str, Any], now_t
     if not actions: actions.append("No trade: no confirmed entry signal")
     eq = account_equity(state, prices)
     dd = max(0.0, (state["day_start_equity_eur"] - eq) / state["day_start_equity_eur"])
-    if dd >= DAILY_DD_LIMIT or state.get("consecutive_losses", 0) >= MAX_CONSECUTIVE_LOSSES:
+    if dd >= DAILY_DD_LIMIT or state.get("consecutive_losses", 0) >= MAX_LOSSES:
         state["halted_day_utc"] = day
     report = {"timestamp_utc": datetime.fromtimestamp(now, timezone.utc).isoformat(),
               "strategy_version": VERSION, "mode": "paper", "live_orders_enabled": False,
